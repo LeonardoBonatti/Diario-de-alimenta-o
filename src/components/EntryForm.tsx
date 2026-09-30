@@ -44,6 +44,7 @@ export default function EntryForm({ initial, onSaved, onCancel }: EntryFormProps
   const [layDownSoon, setLayDownSoon] = useState<boolean | null>(initial?.layDownSoon ?? null);
   const [largeMeal, setLargeMeal] = useState<boolean | null>(initial?.largeMeal ?? null);
   const [symptoms, setSymptoms] = useState<Symptom[]>(initial?.symptoms ?? []);
+  const [symptomDraft, setSymptomDraft] = useState('');
   const [useNow, setUseNow] = useState(!isEdit);
   const [occurredAt, setOccurredAt] = useState(toDatetimeLocalValue(initial?.occurredAt ?? new Date()));
   const [notes, setNotes] = useState(initial?.notes ?? '');
@@ -59,6 +60,30 @@ export default function EntryForm({ initial, onSaved, onCancel }: EntryFormProps
 
   const removeSymptom = (index: number) => setSymptoms((prev) => prev.filter((_, i) => i !== index));
 
+  /** Adiciona os sintomas digitados (aceita vários separados por vírgula), ignorando repetidos. */
+  function commitSymptomDraft() {
+    const names = symptomDraft
+      .split(/[,;\n]/)
+      .map((n) => n.trim().toLowerCase())
+      .filter(Boolean);
+    if (names.length) {
+      setSymptoms((prev) => {
+        const used = new Set(prev.map((s) => s.name.trim().toLowerCase()));
+        const fresh = [...new Set(names)].filter((n) => !used.has(n));
+        return [...prev, ...fresh.map((name) => ({ name, intensity: 3 as Intensity }))];
+      });
+    }
+    setSymptomDraft('');
+  }
+
+  function handleSymptomKeyDown(e: KeyboardEvent<HTMLInputElement>) {
+    if (e.nativeEvent.isComposing) return;
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      commitSymptomDraft();
+    }
+  }
+
   function resetForm() {
     setMealType('');
     setMealLabel('');
@@ -66,6 +91,7 @@ export default function EntryForm({ initial, onSaved, onCancel }: EntryFormProps
     setLayDownSoon(null);
     setLargeMeal(null);
     setSymptoms([]);
+    setSymptomDraft('');
     setNotes('');
     setUseNow(true);
     setOccurredAt(toDatetimeLocalValue(new Date()));
@@ -210,7 +236,30 @@ export default function EntryForm({ initial, onSaved, onCancel }: EntryFormProps
       <fieldset className="space-y-3">
         <legend className="text-sm font-medium text-slate-700">Sintomas</legend>
 
-        {symptoms.length === 0 && <p className="text-sm text-slate-400">Nenhum sintoma adicionado.</p>}
+        <div className="flex gap-2">
+          <input
+            aria-label="Digite um sintoma"
+            list="symptom-suggestions"
+            value={symptomDraft}
+            onChange={(e) => setSymptomDraft(e.target.value)}
+            onKeyDown={handleSymptomKeyDown}
+            onBlur={commitSymptomDraft}
+            maxLength={80}
+            placeholder="Digite um sintoma e aperte Enter. Ex.: garganta arranhando"
+            className={inputClass}
+          />
+          <button
+            type="button"
+            onClick={commitSymptomDraft}
+            className="shrink-0 rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:border-teal-500 hover:text-teal-700"
+          >
+            Adicionar
+          </button>
+        </div>
+
+        {symptoms.length === 0 && (
+          <p className="text-sm text-slate-400">Nenhum sintoma adicionado. Digite acima ou toque numa sugestão abaixo.</p>
+        )}
 
         {symptoms.map((symptom, i) => (
           <div key={i} className="flex flex-col gap-3 rounded-lg border border-slate-200 p-3 sm:flex-row sm:items-center">
@@ -288,13 +337,6 @@ export default function EntryForm({ initial, onSaved, onCancel }: EntryFormProps
               </div>
             );
           })}
-          <button
-            type="button"
-            onClick={() => addSymptom()}
-            className="rounded-lg border border-dashed border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:border-teal-500 hover:text-teal-700"
-          >
-            + Outro sintoma
-          </button>
         </div>
       </fieldset>
 
