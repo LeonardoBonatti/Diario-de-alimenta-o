@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { passwordEnabled } from '@/lib/session';
+import { logoutAction } from '@/lib/session-actions';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -20,6 +22,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <Link href="/dashboard" className="text-sm text-slate-600 hover:text-teal-700">
               Dashboard
             </Link>
+            {passwordEnabled() && (
+              <form action={logoutAction} className="ml-auto">
+                <button className="text-sm text-slate-400 hover:text-slate-700">Sair</button>
+              </form>
+            )}
           </nav>
         </header>
         <main className="mx-auto max-w-3xl px-4 py-8">{children}</main>

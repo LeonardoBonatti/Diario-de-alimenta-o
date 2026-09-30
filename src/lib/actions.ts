@@ -1,22 +1,24 @@
 'use server';
 
-import { auth } from './auth';
+import { cookies } from 'next/headers';
 import { DAY_MS } from './dates';
 import { deleteEntry, fetchEntriesInRange, insertEntry, updateEntry } from './entries';
 import { getReportForRange } from './report';
+import { OWNER_ID } from './schema';
+import { isValidSession, SESSION_COOKIE } from './session';
 import { AppError, type EntryInput } from './types';
 
 export type ActionResult<T> = { ok: true; data: T } | { ok: false; error: string };
 
 /**
- * Toda Server Action passa por aqui: exige sessão e converte erros em
- * resultado (em produção, exceções lançadas chegam mascaradas ao cliente).
+ * Toda Server Action passa por aqui: confere a sessão (além do middleware) e
+ * converte erros em resultado (em produção, exceções chegam mascaradas ao cliente).
  */
 async function run<T>(fn: (userId: string) => Promise<T>): Promise<ActionResult<T>> {
   try {
-    const session = await auth();
-    if (!session?.user?.id) throw new AppError('Sessão expirada. Entre novamente.');
-    return { ok: true, data: await fn(session.user.id) };
+    const cookie = (await cookies()).get(SESSION_COOKIE)?.value;
+    if (!(await isValidSession(cookie))) throw new AppError('Sessão expirada. Recarregue a página e entre novamente.');
+    return { ok: true, data: await fn(OWNER_ID) };
   } catch (err) {
     if (err instanceof AppError) return { ok: false, error: err.message };
     console.error(err);

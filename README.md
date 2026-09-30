@@ -1,16 +1,16 @@
 # Diário de Alimentação e Sintomas
 
-Next.js (App Router) + TailwindCSS · **Vercel** (hospedagem + Cron) · **Neon Postgres** (via Vercel Marketplace) · **Auth.js** (login Google).
+Next.js (App Router) + TailwindCSS · **Vercel** (hospedagem + Cron) · **Neon Postgres** (via Vercel Marketplace).
+App de **uso pessoal (um único usuário)**, protegido por uma senha opcional.
 
 ```
-Navegador ──▶ Server Actions (auth() + validação) ──▶ Neon Postgres
-                                                        ▲
-Vercel Cron (sáb 20h) ──▶ /api/cron/weekly-report ──────┘ ──▶ Resend (e-mail, opcional)
+Navegador ──▶ middleware (senha) ──▶ Server Actions (validação) ──▶ Neon Postgres
+                                                                    ▲
+Vercel Cron (sáb 20h) ──▶ /api/cron/weekly-report ──────────────────┘ ──▶ Resend (e-mail, opcional)
 ```
 
 O navegador **nunca** acessa o banco diretamente. Toda leitura e escrita passa por uma
-Server Action ([`src/lib/actions.ts`](src/lib/actions.ts)) que exige sessão, e toda query filtra por
-`user_id`: esse é o equivalente às "regras de segurança" do Firestore.
+Server Action ([`src/lib/actions.ts`](src/lib/actions.ts)), que confere a sessão e valida os dados.
 
 ---
 
@@ -20,7 +20,7 @@ Schema completo: [`src/lib/schema.ts`](src/lib/schema.ts), aplicado automaticame
 
 | Tabela | Conteúdo |
 |---|---|
-| `users` | `id` (sub do Google), `email`, `name`, `notify_by_email` |
+| `users` | Uma única linha (`id = 'owner'`). Mantida para permitir multiusuário no futuro sem migração |
 | `entries` | `user_id`, `meal_type` (null = só sintomas), `foods text[]`, `symptoms jsonb` (`[{name, intensity}]`), `notes`, **`occurred_at timestamptz`** |
 | `weekly_reports` | PK `(user_id, week_start)`, `top_triggers jsonb`, `report jsonb`, `emailed_at` |
 
@@ -63,13 +63,12 @@ cliente é só UX. O servidor revalida tudo em `normalizeEntryInput()`.
 3. Em **Settings → Functions → Function Region** da Vercel, use a mesma região do banco
    (ex.: `gru1`, São Paulo), para reduzir a latência de cada query.
 
-### 4.2 Login com Google
-1. No [Google Cloud Console](https://console.cloud.google.com/apis/credentials), crie um
-   **ID do cliente OAuth** do tipo *Aplicativo da Web*.
-2. Em **URIs de redirecionamento autorizados**, adicione:
-   - `http://localhost:3000/api/auth/callback/google`
-   - `https://seu-app.vercel.app/api/auth/callback/google`
-3. Cadastre `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET` e `AUTH_SECRET` nas variáveis da Vercel.
+### 4.2 Senha de acesso (recomendado)
+Cadastre `APP_PASSWORD` nas variáveis da Vercel e faça Redeploy. A partir daí, o app pede
+essa senha ([`src/middleware.ts`](src/middleware.ts)) e lembra o navegador por 90 dias.
+Trocar a senha desconecta todos os navegadores.
+
+Sem `APP_PASSWORD`, o app fica **aberto**: qualquer pessoa com o link vê e edita os dados.
 
 ### 4.3 Cron semanal
 1. Cadastre `CRON_SECRET` (string aleatória longa). A Vercel a envia como
@@ -79,10 +78,10 @@ cliente é só UX. O servidor revalida tudo em `normalizeEntryInput()`.
    { "crons": [{ "path": "/api/cron/weekly-report", "schedule": "0 23 * * 6" }] }
    ```
    **O cron roda em UTC**: `0 23 * * 6` = sábado 23:00 UTC = **sábado 20:00 em Brasília**.
-3. (Opcional) Para receber por e-mail, configure `RESEND_API_KEY`, `REPORT_EMAIL_FROM` e `APP_URL`.
+3. (Opcional) Para receber por e-mail, configure `REPORT_EMAIL_TO`, `RESEND_API_KEY`, `REPORT_EMAIL_FROM` e `APP_URL`.
 4. Faça o deploy e confira em **Settings → Cron Jobs**. O botão **Run** dispara a rota na hora.
 
-O que a rota [`route.ts`](src/app/api/cron/weekly-report/route.ts) faz para cada usuário:
+O que a rota [`route.ts`](src/app/api/cron/weekly-report/route.ts) faz:
 calcula a semana (domingo a sábado), roda `correlate()`, faz `upsert` em `weekly_reports`
 e, se configurado, envia o e-mail. Antes do envio, ela "reserva" a linha
 (`emailed_at is null`), o que impede e-mails duplicados em execuções concorrentes.

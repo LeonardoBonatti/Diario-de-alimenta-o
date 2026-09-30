@@ -3,6 +3,7 @@ import { correlate, DEFAULT_WINDOW_HOURS, topTriggers, type FoodStat } from '@/l
 import { addDays, HOUR_MS, rangeFromDateKeys, toDateKey } from '@/lib/dates';
 import { sql } from '@/lib/db';
 import { fetchEntriesInRange } from '@/lib/entries';
+import { OWNER_ID } from '@/lib/schema';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -44,17 +45,17 @@ export async function GET(req: Request) {
     lookbackStart: new Date(start.getTime() - DEFAULT_WINDOW_HOURS * HOUR_MS),
   };
 
-  const users = (await sql`select id, email, notify_by_email from users`) as UserRow[];
-  const results = await Promise.allSettled(users.map((u) => processUser(u, ctx)));
+  // Usuário único; o e-mail do resumo vem de REPORT_EMAIL_TO (opcional).
+  const recipient = process.env.REPORT_EMAIL_TO ?? '';
+  const owner: UserRow = { id: OWNER_ID, email: recipient, notify_by_email: Boolean(recipient) };
 
-  const summary = results.map((r, i) =>
-    r.status === 'fulfilled'
-      ? { userId: users[i].id, ok: true, ...r.value }
-      : { userId: users[i].id, ok: false, error: String(r.reason) },
-  );
-  summary.filter((s) => !s.ok).forEach((s) => console.error('[weekly-report] falha', s));
-
-  return NextResponse.json({ week: `${weekStartKey}..${weekEndKey}`, results: summary });
+  try {
+    const result = await processUser(owner, ctx);
+    return NextResponse.json({ week: `${weekStartKey}..${weekEndKey}`, ok: true, ...result });
+  } catch (err) {
+    console.error('[weekly-report] falha', err);
+    return NextResponse.json({ week: `${weekStartKey}..${weekEndKey}`, ok: false }, { status: 500 });
+  }
 }
 
 async function processUser(user: UserRow, ctx: WeekContext) {

@@ -1,11 +1,17 @@
 /**
+ * App de um único usuário: todos os registros pertencem a este id.
+ * A coluna user_id foi mantida para não exigir migração e permitir multiusuário no futuro.
+ */
+export const OWNER_ID = 'owner';
+
+/**
  * Schema do banco. Aplicado automaticamente (e de forma idempotente) na
  * primeira consulta de cada instância — ver ensureSchema() em db.ts.
  * Um comando por item: o driver HTTP do Neon executa um statement por vez.
  */
 export const SCHEMA_STATEMENTS = [
   `create table if not exists users (
-     id              text primary key,               -- "sub" do Google (estável)
+     id              text primary key,
      email           text not null,
      name            text,
      notify_by_email boolean not null default true,
@@ -46,4 +52,7 @@ export const SCHEMA_STATEMENTS = [
      emailed_at   timestamptz,
      primary key (user_id, week_start)
    )`,
+
+  // Dono único do diário (referenciado por entries e weekly_reports).
+  `insert into users (id, email) values ('${OWNER_ID}', '') on conflict (id) do nothing`,
 ];
