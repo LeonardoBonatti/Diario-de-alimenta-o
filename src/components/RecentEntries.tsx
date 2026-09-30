@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { deleteEntryAction, listRecentEntriesAction } from '@/lib/actions';
 import { formatDateTime } from '@/lib/dates';
-import { MEAL_LABELS, type Entry } from '@/lib/types';
+import { mealDisplayName, type Entry } from '@/lib/types';
 import EntryForm from './EntryForm';
 
 interface Props {
@@ -56,13 +56,23 @@ export default function RecentEntries({ refreshKey }: Props) {
               <div className="space-y-1">
                 <p className="text-xs text-slate-500">
                   {formatDateTime(e.occurredAt)}
-                  {e.mealType && ` · ${MEAL_LABELS[e.mealType]}`}
+                  {mealDisplayName(e) && ` · ${mealDisplayName(e)}`}
                 </p>
                 {e.foods.length > 0 && <p className="text-sm">{e.foods.join(', ')}</p>}
                 {e.symptoms.length > 0 && (
-                  <p className="text-sm text-orange-700">
+                  <p className="text-sm text-rose-700">
                     {e.symptoms.map((s) => `${s.name} (${s.intensity})`).join(', ')}
                   </p>
+                )}
+                {(e.layDownSoon || e.largeMeal) && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {e.layDownSoon && (
+                      <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs text-amber-800">deitou logo após</span>
+                    )}
+                    {e.largeMeal && (
+                      <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs text-amber-800">refeição volumosa</span>
+                    )}
+                  </div>
                 )}
               </div>
               <div className="flex shrink-0 gap-3 text-sm">

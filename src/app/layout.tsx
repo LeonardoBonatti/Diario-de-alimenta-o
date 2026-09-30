@@ -6,7 +6,7 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: 'Diário de Alimentação',
-  description: 'Registre refeições e sintomas e descubra seus gatilhos.',
+  description: 'Registre refeições e sintomas de refluxo e descubra seus gatilhos.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -14,13 +14,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="pt-BR">
       <body>
         <header className="border-b border-slate-200 bg-white">
-          <nav className="mx-auto flex max-w-3xl items-center gap-6 px-4 py-3">
+          <nav className="mx-auto flex max-w-3xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
             <span className="font-semibold text-teal-700">Diário Alimentar</span>
             <Link href="/" className="text-sm text-slate-600 hover:text-teal-700">
               Registro
             </Link>
             <Link href="/dashboard" className="text-sm text-slate-600 hover:text-teal-700">
               Dashboard
+            </Link>
+            <Link href="/rsi" className="text-sm text-slate-600 hover:text-teal-700">
+              Escala RSI
             </Link>
             {passwordEnabled() && (
               <form action={logoutAction} className="ml-auto">

@@ -20,19 +20,6 @@ export const MEAL_LABELS: Record<MealType, string> = {
   outro: 'Outro',
 };
 
-export const COMMON_SYMPTOMS = [
-  'dor de estômago',
-  'azia',
-  'inchaço',
-  'gases',
-  'náusea',
-  'diarreia',
-  'constipação',
-  'refluxo',
-  'dor de cabeça',
-  'cansaço',
-];
-
 export type Intensity = 1 | 2 | 3 | 4 | 5;
 
 export interface Symptom {
@@ -44,8 +31,14 @@ export interface Symptom {
 export interface Entry {
   id: string;
   mealType: MealType | null;
+  /** Nome livre quando mealType = 'outro'. */
+  mealLabel: string | null;
   foods: string[];
   symptoms: Symptom[];
+  /** Deitou/dormiu até 3h depois de comer (null = não informado). */
+  layDownSoon: boolean | null;
+  /** Refeição volumosa (null = não informado). */
+  largeMeal: boolean | null;
   occurredAt: Date;
   notes: string | null;
 }
@@ -53,10 +46,19 @@ export interface Entry {
 /** Dados vindos do formulário (não confiáveis até passar por normalizeEntryInput). */
 export interface EntryInput {
   mealType: MealType | null;
+  mealLabel?: string | null;
   foods: string[];
   symptoms: Symptom[];
+  layDownSoon?: boolean | null;
+  largeMeal?: boolean | null;
   occurredAt: Date;
   notes?: string | null;
+}
+
+export function mealDisplayName(entry: Pick<Entry, 'mealType' | 'mealLabel'>): string | null {
+  if (!entry.mealType) return null;
+  if (entry.mealType === 'outro' && entry.mealLabel) return entry.mealLabel;
+  return MEAL_LABELS[entry.mealType];
 }
 
 /** Erro cuja mensagem pode ser exibida ao usuário. */

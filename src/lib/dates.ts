@@ -17,6 +17,13 @@ const dateKeyFormatter = new Intl.DateTimeFormat('en-CA', {
   day: '2-digit',
 });
 
+const hourFormatter = new Intl.DateTimeFormat('en-GB', { timeZone: APP_TZ, hour: '2-digit', hourCycle: 'h23' });
+
+/** Hora do dia (0–23) no fuso do app. */
+export function hourInTz(d: Date): number {
+  return Number(hourFormatter.format(d));
+}
+
 /** Date -> "YYYY-MM-DD" no fuso do app. */
 export function toDateKey(d: Date): string {
   return dateKeyFormatter.format(d);

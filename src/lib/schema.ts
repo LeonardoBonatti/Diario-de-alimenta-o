@@ -7,7 +7,7 @@ export const OWNER_ID = 'owner';
 /**
  * Schema do banco. Aplicado automaticamente (e de forma idempotente) na
  * primeira consulta de cada instância — ver ensureSchema() em db.ts.
- * Um comando por item: o driver HTTP do Neon executa um statement por vez.
+ * Um comando por item; todos vão numa única transação (uma ida ao banco).
  */
 export const SCHEMA_STATEMENTS = [
   `create table if not exists users (
@@ -35,6 +35,13 @@ export const SCHEMA_STATEMENTS = [
      constraint entries_limits    check (cardinality(foods) <= 50 and jsonb_array_length(symptoms) <= 20)
    )`,
 
+  // Colunas adicionadas depois da primeira versão (idempotente em bancos existentes).
+  // meal_label: nome livre quando meal_type = 'outro'.
+  `alter table entries add column if not exists meal_label text check (char_length(meal_label) <= 60)`,
+  // Hábitos ligados ao refluxo: null = não informado.
+  `alter table entries add column if not exists lay_down_soon boolean`,
+  `alter table entries add column if not exists large_meal boolean`,
+
   // Toda consulta é "registros do usuário X entre A e B".
   `create index if not exists entries_user_time_idx on entries (user_id, occurred_at)`,
 
@@ -52,6 +59,17 @@ export const SCHEMA_STATEMENTS = [
      emailed_at   timestamptz,
      primary key (user_id, week_start)
    )`,
+
+  // Reflux Symptom Index (Belafsky): 9 itens de 0 a 5, total 0–45.
+  `create table if not exists rsi_assessments (
+     id          uuid primary key default gen_random_uuid(),
+     user_id     text not null references users(id) on delete cascade,
+     answered_at timestamptz not null default now(),
+     answers     smallint[] not null check (cardinality(answers) = 9),
+     total       smallint not null check (total between 0 and 45),
+     notes       text check (char_length(notes) <= 1000)
+   )`,
+  `create index if not exists rsi_user_time_idx on rsi_assessments (user_id, answered_at)`,
 
   // Dono único do diário (referenciado por entries e weekly_reports).
   `insert into users (id, email) values ('${OWNER_ID}', '') on conflict (id) do nothing`,

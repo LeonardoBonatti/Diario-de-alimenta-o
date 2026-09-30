@@ -3,6 +3,7 @@ import { correlate, DEFAULT_WINDOW_HOURS, topTriggers, type FoodStat } from '@/l
 import { addDays, HOUR_MS, rangeFromDateKeys, toDateKey } from '@/lib/dates';
 import { sql } from '@/lib/db';
 import { fetchEntriesInRange } from '@/lib/entries';
+import { isRefluxSymptom } from '@/lib/reflux';
 import { OWNER_ID } from '@/lib/schema';
 
 export const runtime = 'nodejs';
@@ -60,7 +61,7 @@ export async function GET(req: Request) {
 
 async function processUser(user: UserRow, ctx: WeekContext) {
   const entries = await fetchEntriesInRange(user.id, ctx.lookbackStart, ctx.end);
-  const report = correlate(entries, { periodStart: ctx.start, periodEnd: ctx.end });
+  const report = correlate(entries, { periodStart: ctx.start, periodEnd: ctx.end, symptomFilter: isRefluxSymptom });
   const triggers = topTriggers(report);
   const entryCount = entries.filter((e) => e.occurredAt >= ctx.start).length;
 
@@ -113,11 +114,11 @@ async function sendReportEmail(to: string, ctx: WeekContext, triggers: FoodStat[
            <th style="padding:6px 12px">Alimento</th><th style="padding:6px 12px">Com sintoma</th>
            <th style="padding:6px 12px">Intensidade média</th><th style="padding:6px 12px">Sintomas</th>
          </tr></thead><tbody>${rows}</tbody></table>`
-    : '<p>Nenhum alimento se destacou como gatilho nesta semana. 🎉</p>';
+    : '<p>Nenhum alimento se destacou como gatilho de refluxo nesta semana. 🎉</p>';
 
   const html = `<div style="font-family:system-ui,sans-serif;color:#0f172a">
-    <h2>Seu resumo semanal (${period})</h2>
-    <p>${entryCount} registros na semana. Principais possíveis gatilhos:</p>
+    <h2>Seu resumo semanal de refluxo (${period})</h2>
+    <p>${entryCount} registros na semana. Alimentos mais associados a sintomas de refluxo:</p>
     ${body}
     <p style="font-size:12px;color:#64748b">Correlação não é causalidade — discuta os padrões com um profissional de saúde.</p>
     ${process.env.APP_URL ? `<p><a href="${process.env.APP_URL}/dashboard">Abrir o dashboard</a></p>` : ''}

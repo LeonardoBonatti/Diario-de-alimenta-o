@@ -3,6 +3,7 @@ import { correlate, DEFAULT_WINDOW_HOURS, type CorrelationReport, type FoodStat 
 import { DATE_KEY_RE, DAY_MS, HOUR_MS, rangeFromDateKeys } from './dates';
 import { sql } from './db';
 import { fetchEntriesInRange } from './entries';
+import { isRefluxSymptom } from './reflux';
 import { AppError } from './types';
 
 export const MAX_RANGE_DAYS = 366;
@@ -27,6 +28,7 @@ export async function getReportForRange(
   fromKey: string,
   toKey: string,
   windowHours = DEFAULT_WINDOW_HOURS,
+  refluxOnly = true,
 ): Promise<RangeReport> {
   if (!DATE_KEY_RE.test(fromKey) || !DATE_KEY_RE.test(toKey)) {
     throw new AppError('Datas inválidas. Use o formato AAAA-MM-DD.');
@@ -48,7 +50,12 @@ export async function getReportForRange(
 
   return {
     entryCount: entries.filter((e) => e.occurredAt >= start).length,
-    report: correlate(entries, { periodStart: start, periodEnd: end, windowHours }),
+    report: correlate(entries, {
+      periodStart: start,
+      periodEnd: end,
+      windowHours,
+      symptomFilter: refluxOnly ? isRefluxSymptom : undefined,
+    }),
   };
 }
 

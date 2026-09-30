@@ -21,7 +21,7 @@ function getClient() {
 function ensureSchema() {
   schemaReady ??= (async () => {
     const c = getClient();
-    for (const statement of SCHEMA_STATEMENTS) await c.query(statement);
+    await c.transaction(SCHEMA_STATEMENTS.map((statement) => c.query(statement)));
   })().catch((err) => {
     schemaReady = null;
     throw err;

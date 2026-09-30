@@ -12,6 +12,24 @@ Vercel Cron (sáb 20h) ──▶ /api/cron/weekly-report ───────�
 O navegador **nunca** acessa o banco diretamente. Toda leitura e escrita passa por uma
 Server Action ([`src/lib/actions.ts`](src/lib/actions.ts)), que confere a sessão e valida os dados.
 
+## Foco: refluxo (DRGE e refluxo laringofaríngeo)
+
+O app foi pensado para quem tem **refluxo laringofaríngeo (RLF)**: o ácido chega à laringe e
+causa sintomas de garganta e voz (pigarro, rouquidão, tosse, "bolo" na garganta), muitas vezes
+**sem azia**. Por isso:
+
+- **Sintomas agrupados** em "Garganta e voz" (RLF), "Estômago e esôfago" (DRGE) e "Outros"
+  ([`src/lib/reflux.ts`](src/lib/reflux.ts)). Relatórios e resumo semanal consideram, por padrão,
+  só os sintomas de refluxo.
+- **Gatilhos comuns** (café, chocolate, álcool, tomate, cítricos, fritura, hortelã…) aparecem
+  como atalhos no formulário e recebem uma etiqueta no relatório.
+- **Hábitos por refeição**: "deitou até 3h depois" e "refeição volumosa", além da refeição
+  depois das 20h (calculada pela hora). O dashboard compara a taxa de sintomas com e sem cada hábito.
+- **Escala RSI** (Reflux Symptom Index, Belafsky 2002) em `/rsi`: 9 itens de 0 a 5,
+  com limite de referência 13, para acompanhar a evolução mês a mês ([`src/lib/rsi.ts`](src/lib/rsi.ts)).
+
+Correlação não é causalidade. O app ajuda a levar padrões concretos para o médico.
+
 ---
 
 ## 1. Modelo de dados
@@ -23,6 +41,10 @@ Schema completo: [`src/lib/schema.ts`](src/lib/schema.ts), aplicado automaticame
 | `users` | Uma única linha (`id = 'owner'`). Mantida para permitir multiusuário no futuro sem migração |
 | `entries` | `user_id`, `meal_type` (null = só sintomas), `foods text[]`, `symptoms jsonb` (`[{name, intensity}]`), `notes`, **`occurred_at timestamptz`** |
 | `weekly_reports` | PK `(user_id, week_start)`, `top_triggers jsonb`, `report jsonb`, `emailed_at` |
+| `rsi_assessments` | `answers smallint[9]`, `total` (0–45), `answered_at`, `notes` |
+
+`entries` também guarda `meal_label` (nome livre quando a refeição é "Outro"), `lay_down_soon` e
+`large_meal` (hábitos; `null` = não informado).
 
 **Por que assim:**
 - **Índice `(user_id, occurred_at)`**: toda consulta é "registros do usuário X entre A e B".

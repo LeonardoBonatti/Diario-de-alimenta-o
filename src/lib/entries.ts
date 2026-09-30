@@ -48,7 +48,27 @@ export function normalizeEntryInput(input: EntryInput) {
 
   const notes = typeof input.notes === 'string' ? input.notes.trim().slice(0, 1000) || null : null;
 
-  return { mealType: input.mealType, foods, symptoms, occurredAt, notes };
+  let mealLabel: string | null = null;
+  if (input.mealType === 'outro') {
+    mealLabel = typeof input.mealLabel === 'string' ? input.mealLabel.trim().replace(/\s+/g, ' ') : '';
+    if (!mealLabel) throw new AppError('Informe qual foi a refeição.');
+    if (mealLabel.length > 60) throw new AppError('Nome da refeição muito longo (máx. 60 caracteres).');
+  }
+
+  // Hábitos só fazem sentido quando houve refeição.
+  const isMeal = input.mealType !== null || foods.length > 0;
+  const toBool = (v: unknown) => (isMeal && (v === true || v === false) ? v : null);
+
+  return {
+    mealType: input.mealType,
+    mealLabel,
+    foods,
+    symptoms,
+    layDownSoon: toBool(input.layDownSoon),
+    largeMeal: toBool(input.largeMeal),
+    occurredAt,
+    notes,
+  };
 }
 
 function assertUuid(id: string) {
@@ -59,8 +79,11 @@ function entryFromRow(row: Record<string, unknown>): Entry {
   return {
     id: row.id as string,
     mealType: (row.meal_type as MealType | null) ?? null,
+    mealLabel: (row.meal_label as string | null) ?? null,
     foods: (row.foods as string[]) ?? [],
     symptoms: (row.symptoms as Symptom[]) ?? [],
+    layDownSoon: (row.lay_down_soon as boolean | null) ?? null,
+    largeMeal: (row.large_meal as boolean | null) ?? null,
     occurredAt: new Date(row.occurred_at as string | Date),
     notes: (row.notes as string | null) ?? null,
   };
@@ -69,9 +92,9 @@ function entryFromRow(row: Record<string, unknown>): Entry {
 export async function insertEntry(userId: string, input: EntryInput) {
   const e = normalizeEntryInput(input);
   await sql`
-    insert into entries (user_id, meal_type, foods, symptoms, notes, occurred_at)
-    values (${userId}, ${e.mealType}, ${e.foods}::text[], ${JSON.stringify(e.symptoms)}::jsonb,
-            ${e.notes}, ${e.occurredAt.toISOString()})`;
+    insert into entries (user_id, meal_type, meal_label, foods, symptoms, lay_down_soon, large_meal, notes, occurred_at)
+    values (${userId}, ${e.mealType}, ${e.mealLabel}, ${e.foods}::text[], ${JSON.stringify(e.symptoms)}::jsonb,
+            ${e.layDownSoon}, ${e.largeMeal}, ${e.notes}, ${e.occurredAt.toISOString()})`;
 }
 
 export async function updateEntry(userId: string, id: string, input: EntryInput) {
@@ -80,8 +103,10 @@ export async function updateEntry(userId: string, id: string, input: EntryInput)
   // O filtro por user_id é a "regra de segurança": ninguém edita registro alheio.
   const rows = await sql`
     update entries
-       set meal_type = ${e.mealType}, foods = ${e.foods}::text[], symptoms = ${JSON.stringify(e.symptoms)}::jsonb,
-           notes = ${e.notes}, occurred_at = ${e.occurredAt.toISOString()}, updated_at = now()
+       set meal_type = ${e.mealType}, meal_label = ${e.mealLabel}, foods = ${e.foods}::text[],
+           symptoms = ${JSON.stringify(e.symptoms)}::jsonb, lay_down_soon = ${e.layDownSoon},
+           large_meal = ${e.largeMeal}, notes = ${e.notes}, occurred_at = ${e.occurredAt.toISOString()},
+           updated_at = now()
      where id = ${id} and user_id = ${userId}
      returning id`;
   if (rows.length === 0) throw new AppError('Registro não encontrado.');
@@ -95,7 +120,7 @@ export async function deleteEntry(userId: string, id: string) {
 /** Registros em [start, end), ordem cronológica. Usa o índice (user_id, occurred_at). */
 export async function fetchEntriesInRange(userId: string, start: Date, end: Date): Promise<Entry[]> {
   const rows = await sql`
-    select id, meal_type, foods, symptoms, notes, occurred_at
+    select id, meal_type, meal_label, foods, symptoms, lay_down_soon, large_meal, notes, occurred_at
       from entries
      where user_id = ${userId}
        and occurred_at >= ${start.toISOString()}

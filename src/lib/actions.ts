@@ -4,6 +4,7 @@ import { cookies } from 'next/headers';
 import { DAY_MS } from './dates';
 import { deleteEntry, fetchEntriesInRange, insertEntry, updateEntry } from './entries';
 import { getReportForRange } from './report';
+import { insertRsi } from './rsi-store';
 import { OWNER_ID } from './schema';
 import { isValidSession, SESSION_COOKIE } from './session';
 import { AppError, type EntryInput } from './types';
@@ -49,6 +50,10 @@ export async function listRecentEntriesAction() {
   });
 }
 
-export async function getReportAction(fromKey: string, toKey: string, windowHours: number) {
-  return run((userId) => getReportForRange(userId, fromKey, toKey, windowHours));
+export async function getReportAction(fromKey: string, toKey: string, windowHours: number, refluxOnly: boolean) {
+  return run((userId) => getReportForRange(userId, fromKey, toKey, windowHours, refluxOnly === true));
+}
+
+export async function saveRsiAction(answers: number[], notes: string) {
+  return run((userId) => insertRsi(userId, answers, notes));
 }

@@ -3,15 +3,8 @@
 import { useState, type FormEvent, type KeyboardEvent } from 'react';
 import { createEntryAction, updateEntryAction } from '@/lib/actions';
 import { toDatetimeLocalValue } from '@/lib/dates';
-import {
-  COMMON_SYMPTOMS,
-  MEAL_LABELS,
-  MEAL_TYPES,
-  type Entry,
-  type Intensity,
-  type MealType,
-  type Symptom,
-} from '@/lib/types';
+import { ALL_SYMPTOMS, COMMON_TRIGGERS, SYMPTOM_GROUPS } from '@/lib/reflux';
+import { MEAL_LABELS, MEAL_TYPES, type Entry, type Intensity, type MealType, type Symptom } from '@/lib/types';
 
 interface EntryFormProps {
   /** Quando presente, o formulário edita o registro em vez de criar um novo. */
@@ -40,15 +33,23 @@ const INTENSITY_LABELS: Record<Intensity, string> = {
   5: 'Muito forte',
 };
 
+const inputClass =
+  'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/30';
+
 export default function EntryForm({ initial, onSaved, onCancel }: EntryFormProps) {
   const isEdit = Boolean(initial);
   const [mealType, setMealType] = useState<MealType | ''>(initial?.mealType ?? '');
+  const [mealLabel, setMealLabel] = useState(initial?.mealLabel ?? '');
   const [foods, setFoods] = useState<string[]>(initial?.foods ?? []);
+  const [layDownSoon, setLayDownSoon] = useState<boolean | null>(initial?.layDownSoon ?? null);
+  const [largeMeal, setLargeMeal] = useState<boolean | null>(initial?.largeMeal ?? null);
   const [symptoms, setSymptoms] = useState<Symptom[]>(initial?.symptoms ?? []);
   const [useNow, setUseNow] = useState(!isEdit);
   const [occurredAt, setOccurredAt] = useState(toDatetimeLocalValue(initial?.occurredAt ?? new Date()));
   const [notes, setNotes] = useState(initial?.notes ?? '');
   const [status, setStatus] = useState<Status>({ type: 'idle' });
+
+  const isMeal = mealType !== '' || foods.length > 0;
 
   const addSymptom = (name = '', intensity: Intensity = 3) =>
     setSymptoms((prev) => [...prev, { name, intensity }]);
@@ -60,7 +61,10 @@ export default function EntryForm({ initial, onSaved, onCancel }: EntryFormProps
 
   function resetForm() {
     setMealType('');
+    setMealLabel('');
     setFoods([]);
+    setLayDownSoon(null);
+    setLargeMeal(null);
     setSymptoms([]);
     setNotes('');
     setUseNow(true);
@@ -73,6 +77,10 @@ export default function EntryForm({ initial, onSaved, onCancel }: EntryFormProps
 
     if (foods.length === 0 && validSymptoms.length === 0) {
       setStatus({ type: 'error', message: 'Informe ao menos um alimento ou um sintoma.' });
+      return;
+    }
+    if (mealType === 'outro' && !mealLabel.trim()) {
+      setStatus({ type: 'error', message: 'Informe qual foi a refeição.' });
       return;
     }
 
@@ -90,7 +98,16 @@ export default function EntryForm({ initial, onSaved, onCancel }: EntryFormProps
     // A validação acima é só UX; o servidor valida de novo (normalizeEntryInput).
     setStatus({ type: 'saving' });
     try {
-      const input = { mealType: mealType || null, foods, symptoms: validSymptoms, occurredAt: when, notes };
+      const input = {
+        mealType: mealType || null,
+        mealLabel: mealType === 'outro' ? mealLabel : null,
+        foods,
+        symptoms: validSymptoms,
+        layDownSoon: isMeal ? layDownSoon : null,
+        largeMeal: isMeal ? largeMeal : null,
+        occurredAt: when,
+        notes,
+      };
       const result = initial ? await updateEntryAction(initial.id, input) : await createEntryAction(input);
       if (!result.ok) {
         setStatus({ type: 'error', message: result.error });
@@ -106,13 +123,20 @@ export default function EntryForm({ initial, onSaved, onCancel }: EntryFormProps
     }
   }
 
-  const unusedSuggestions = COMMON_SYMPTOMS.filter(
-    (name) => !symptoms.some((s) => s.name.trim().toLowerCase() === name),
-  );
+  const usedSymptoms = new Set(symptoms.map((s) => s.name.trim().toLowerCase()));
+  const unusedTriggers = COMMON_TRIGGERS.filter((t) => !foods.includes(t));
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
-      <h2 className="text-lg font-semibold text-slate-900">{isEdit ? 'Editar registro' : 'Novo registro'}</h2>
+      <div>
+        <h2 className="text-lg font-semibold text-slate-900">{isEdit ? 'Editar registro' : 'Novo registro'}</h2>
+        {!isEdit && (
+          <p className="mt-1 text-sm text-slate-500">
+            Registre o que comeu e, quando surgirem, os sintomas. No refluxo laringofaríngeo os sintomas costumam ser
+            de garganta e voz (pigarro, rouquidão, tosse) e podem aparecer horas depois, sem azia.
+          </p>
+        )}
+      </div>
 
       {/* Refeição */}
       <div className="space-y-2">
@@ -123,7 +147,7 @@ export default function EntryForm({ initial, onSaved, onCancel }: EntryFormProps
           id="mealType"
           value={mealType}
           onChange={(e) => setMealType(e.target.value as MealType | '')}
-          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/30"
+          className={inputClass}
         >
           <option value="">— Nenhuma —</option>
           {MEAL_TYPES.map((t) => (
@@ -132,15 +156,55 @@ export default function EntryForm({ initial, onSaved, onCancel }: EntryFormProps
             </option>
           ))}
         </select>
+        {mealType === 'outro' && (
+          <input
+            aria-label="Qual refeição?"
+            value={mealLabel}
+            onChange={(e) => setMealLabel(e.target.value)}
+            maxLength={60}
+            required
+            autoFocus
+            placeholder="Qual refeição? Ex.: pré-treino, lanche da madrugada"
+            className={inputClass}
+          />
+        )}
       </div>
 
       {/* Alimentos */}
       <div className="space-y-2">
         <label htmlFor="foods" className="block text-sm font-medium text-slate-700">
-          Alimentos consumidos
+          Alimentos e bebidas
         </label>
-        <TagInput id="foods" tags={foods} onChange={setFoods} placeholder="Ex.: pão, ovos, café — Enter ou vírgula para adicionar" />
+        <TagInput id="foods" tags={foods} onChange={setFoods} placeholder="Ex.: pão, ovos, café. Enter ou vírgula para adicionar" />
+        {unusedTriggers.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-slate-500">Gatilhos comuns de refluxo:</span>
+            {unusedTriggers.map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setFoods((prev) => [...prev, t])}
+                className="rounded-full bg-amber-50 px-3 py-1 text-xs text-amber-800 hover:bg-amber-100"
+              >
+                + {t}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
+
+      {/* Hábitos da refeição */}
+      {isMeal && (
+        <div className="space-y-3 rounded-lg bg-slate-50 p-4">
+          <p className="text-sm font-medium text-slate-700">Hábitos nesta refeição</p>
+          <YesNo label="Deitei ou fui dormir até 3h depois de comer" value={layDownSoon} onChange={setLayDownSoon} />
+          <YesNo label="Comi uma quantidade grande" value={largeMeal} onChange={setLargeMeal} />
+          <p className="text-xs text-slate-500">
+            Deitar logo após comer e refeições volumosas estão entre os fatores mais ligados ao refluxo. Se ainda não
+            sabe, deixe em branco e edite o registro depois.
+          </p>
+        </div>
+      )}
 
       {/* Sintomas */}
       <fieldset className="space-y-3">
@@ -155,7 +219,7 @@ export default function EntryForm({ initial, onSaved, onCancel }: EntryFormProps
               list="symptom-suggestions"
               value={symptom.name}
               onChange={(e) => updateSymptom(i, { name: e.target.value })}
-              placeholder="Ex.: azia"
+              placeholder="Ex.: pigarro"
               className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/30"
             />
             <div role="radiogroup" aria-label={`Intensidade do sintoma ${i + 1}`} className="flex gap-1">
@@ -190,29 +254,47 @@ export default function EntryForm({ initial, onSaved, onCancel }: EntryFormProps
         ))}
 
         <datalist id="symptom-suggestions">
-          {COMMON_SYMPTOMS.map((s) => (
+          {ALL_SYMPTOMS.map((s) => (
             <option key={s} value={s} />
           ))}
         </datalist>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="space-y-3">
+          {SYMPTOM_GROUPS.map((group) => {
+            const unused = group.symptoms.filter((s) => !usedSymptoms.has(s));
+            if (unused.length === 0) return null;
+            return (
+              <div key={group.id} className="space-y-1.5">
+                <p className="text-xs text-slate-500">
+                  <span className="font-medium text-slate-600">{group.label}</span>
+                  {group.description && ` · ${group.description}`}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {unused.map((name) => (
+                    <button
+                      key={name}
+                      type="button"
+                      onClick={() => addSymptom(name)}
+                      className={`rounded-full px-3 py-1 text-xs ${
+                        group.reflux
+                          ? 'bg-rose-50 text-rose-800 hover:bg-rose-100'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      + {name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
           <button
             type="button"
             onClick={() => addSymptom()}
             className="rounded-lg border border-dashed border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:border-teal-500 hover:text-teal-700"
           >
-            + Adicionar sintoma
+            + Outro sintoma
           </button>
-          {unusedSuggestions.slice(0, 6).map((name) => (
-            <button
-              key={name}
-              type="button"
-              onClick={() => addSymptom(name)}
-              className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-600 hover:bg-teal-50 hover:text-teal-700"
-            >
-              {name}
-            </button>
-          ))}
         </div>
       </fieldset>
 
@@ -235,7 +317,7 @@ export default function EntryForm({ initial, onSaved, onCancel }: EntryFormProps
             value={occurredAt}
             max={toDatetimeLocalValue(new Date())}
             onChange={(e) => setOccurredAt(e.target.value)}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/30 sm:w-auto"
+            className={`${inputClass} sm:w-auto`}
           />
         )}
       </div>
@@ -243,7 +325,7 @@ export default function EntryForm({ initial, onSaved, onCancel }: EntryFormProps
       {/* Observações */}
       <div className="space-y-2">
         <label htmlFor="notes" className="block text-sm font-medium text-slate-700">
-          Observações <span className="font-normal text-slate-400">(opcional)</span>
+          Observações <span className="font-normal text-slate-400">(opcional: remédios, estresse, exercício…)</span>
         </label>
         <textarea
           id="notes"
@@ -251,7 +333,7 @@ export default function EntryForm({ initial, onSaved, onCancel }: EntryFormProps
           maxLength={1000}
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
-          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/30"
+          className={inputClass}
         />
       </div>
 
@@ -276,6 +358,44 @@ export default function EntryForm({ initial, onSaved, onCancel }: EntryFormProps
         )}
       </div>
     </form>
+  );
+}
+
+interface YesNoProps {
+  label: string;
+  value: boolean | null;
+  onChange: (value: boolean | null) => void;
+}
+
+/** Sim / Não; clicar de novo na opção marcada volta para "não informado". */
+function YesNo({ label, value, onChange }: YesNoProps) {
+  const options: { v: boolean; text: string }[] = [
+    { v: true, text: 'Sim' },
+    { v: false, text: 'Não' },
+  ];
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      <span className="text-sm text-slate-700">{label}</span>
+      <div role="radiogroup" aria-label={label} className="flex gap-1">
+        {options.map(({ v, text }) => {
+          const active = value === v;
+          return (
+            <button
+              key={text}
+              type="button"
+              role="radio"
+              aria-checked={active}
+              onClick={() => onChange(active ? null : v)}
+              className={`rounded-lg border px-3 py-1 text-sm transition ${
+                active ? 'border-teal-600 bg-teal-600 text-white' : 'border-slate-300 text-slate-600 hover:bg-white'
+              }`}
+            >
+              {text}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 

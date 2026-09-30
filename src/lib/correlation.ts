@@ -7,14 +7,35 @@
  * conta como "sintoma logo após a refeição" (defasagem 0).
  */
 import type { Entry } from './types';
-import { HOUR_MS } from './dates';
+import { HOUR_MS, hourInTz } from './dates';
 
 export interface CorrelationOptions {
   periodStart: Date;
   periodEnd: Date;
   /** Quantas horas após a refeição um sintoma ainda é atribuído a ela. */
   windowHours?: number;
+  /** Considera só os sintomas aceitos (ex.: apenas os de refluxo). */
+  symptomFilter?: (symptomName: string) => boolean;
 }
+
+/** Hábito da refeição comparado com a taxa de sintoma: com o hábito vs. sem ele. */
+export interface FactorStat {
+  factor: string;
+  withMeals: number;
+  withFollowed: number;
+  withRate: number;
+  withoutMeals: number;
+  withoutFollowed: number;
+  withoutRate: number;
+}
+
+const LATE_MEAL_HOUR = 20;
+
+const FACTORS: { factor: string; value: (meal: Entry) => boolean | null }[] = [
+  { factor: 'Deitou até 3h depois de comer', value: (m) => m.layDownSoon },
+  { factor: 'Refeição volumosa', value: (m) => m.largeMeal },
+  { factor: `Refeição depois das ${LATE_MEAL_HOUR}h`, value: (m) => hourInTz(m.occurredAt) >= LATE_MEAL_HOUR },
+];
 
 export interface SymptomLink {
   symptom: string;
@@ -55,6 +76,7 @@ export interface CorrelationReport {
   baselineRate: number;
   foods: FoodStat[];
   symptoms: SymptomTotal[];
+  factors: FactorStat[];
 }
 
 interface SymptomEvent {
@@ -97,11 +119,14 @@ export function correlate(entries: Entry[], opts: CorrelationOptions): Correlati
   const events: SymptomEvent[] = sorted.flatMap((e) => {
     const at = e.occurredAt.getTime();
     if (!inPeriod(at)) return [];
-    return e.symptoms.map((s) => ({ key: normalizeKey(s.name), label: s.name.trim(), intensity: s.intensity, at }));
+    return e.symptoms
+      .filter((s) => !opts.symptomFilter || opts.symptomFilter(s.name))
+      .map((s) => ({ key: normalizeKey(s.name), label: s.name.trim(), intensity: s.intensity, at }));
   });
 
   const foodAcc = new Map<string, FoodAcc>();
   const attributed = new Set<SymptomEvent>();
+  const mealOutcomes: { meal: Entry; followed: boolean }[] = [];
   let totalMeals = 0;
   let mealsFollowed = 0;
 
@@ -115,6 +140,7 @@ export function correlate(entries: Entry[], opts: CorrelationOptions): Correlati
     totalMeals++;
     const followed = after.length > 0;
     if (followed) mealsFollowed++;
+    mealOutcomes.push({ meal, followed });
     const peak = after.reduce((max, ev) => Math.max(max, ev.intensity), 0);
 
     // Mesmo sintoma várias vezes após uma refeição conta uma vez (maior intensidade).
@@ -192,6 +218,28 @@ export function correlate(entries: Entry[], opts: CorrelationOptions): Correlati
         unattributed: s.unattributed,
       }))
       .sort((x, y) => y.count - x.count),
+    factors: FACTORS.map(({ factor, value }) => {
+      let withMeals = 0, withFollowed = 0, withoutMeals = 0, withoutFollowed = 0;
+      for (const { meal, followed } of mealOutcomes) {
+        const v = value(meal);
+        if (v === true) {
+          withMeals++;
+          if (followed) withFollowed++;
+        } else if (v === false) {
+          withoutMeals++;
+          if (followed) withoutFollowed++;
+        }
+      }
+      return {
+        factor,
+        withMeals,
+        withFollowed,
+        withRate: withMeals ? round2(withFollowed / withMeals) : 0,
+        withoutMeals,
+        withoutFollowed,
+        withoutRate: withoutMeals ? round2(withoutFollowed / withoutMeals) : 0,
+      };
+    }),
   };
 }
 

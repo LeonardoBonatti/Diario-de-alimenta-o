@@ -8,7 +8,7 @@ export default async function WeeklyReportCard({ userId }: { userId: string }) {
 
   return (
     <section className="rounded-2xl bg-gradient-to-br from-teal-600 to-teal-700 p-6 text-white shadow-sm">
-      <h2 className="text-lg font-semibold">Resumo semanal</h2>
+      <h2 className="text-lg font-semibold">Resumo semanal de refluxo</h2>
       {data === null ? (
         <p className="mt-2 text-sm text-teal-100">O primeiro resumo será gerado no próximo sábado às 20h.</p>
       ) : (
