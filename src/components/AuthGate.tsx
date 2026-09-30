@@ -1,7 +1,25 @@
-import { auth, signIn, signOut } from '@/lib/auth';
+import { auth, missingAuthEnv, signIn, signOut } from '@/lib/auth';
 
 /** Server Component: renderiza o conteúdo só com sessão válida. */
 export default async function AuthGate({ children }: { children: (userId: string) => React.ReactNode }) {
+  const missing = missingAuthEnv();
+  if (missing.length > 0) {
+    return (
+      <div className="space-y-3 rounded-2xl bg-amber-50 p-6 text-amber-900 ring-1 ring-amber-200">
+        <h2 className="font-semibold">Login ainda não configurado</h2>
+        <p className="text-sm">Cadastre as variáveis abaixo na Vercel e faça um novo deploy (Deployments → ⋯ → Redeploy):</p>
+        <ul className="list-inside list-disc text-sm">
+          {missing.map((name) => (
+            <li key={name}>
+              <code className="font-mono">{name}</code>
+            </li>
+          ))}
+        </ul>
+        <p className="text-xs text-amber-700">Settings → Environment Variables. O passo a passo está no README (seção 4.2).</p>
+      </div>
+    );
+  }
+
   const session = await auth();
 
   if (!session?.user?.id) {

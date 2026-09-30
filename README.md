@@ -16,7 +16,7 @@ Server Action ([`src/lib/actions.ts`](src/lib/actions.ts)) que exige sessão, e 
 
 ## 1. Modelo de dados
 
-Schema completo: [`db/schema.sql`](db/schema.sql).
+Schema completo: [`src/lib/schema.ts`](src/lib/schema.ts), aplicado automaticamente pelo app.
 
 | Tabela | Conteúdo |
 |---|---|
@@ -58,8 +58,8 @@ cliente é só UX. O servidor revalida tudo em `normalizeEntryInput()`.
 1. No projeto da Vercel: **Storage → Create Database → Neon (Serverless Postgres)**.
    Escolha uma região próxima (ex.: `aws-sa-east-1`, São Paulo) e conecte ao projeto.
    A integração injeta `DATABASE_URL` em todos os ambientes.
-2. Abra o banco no console do Neon (**Open in Neon → SQL Editor**), cole o conteúdo de
-   [`db/schema.sql`](db/schema.sql) e execute.
+2. As tabelas são criadas automaticamente na primeira consulta (`create table if not exists`,
+   ver [`src/lib/schema.ts`](src/lib/schema.ts)). Não é preciso rodar SQL manualmente.
 3. Em **Settings → Functions → Function Region** da Vercel, use a mesma região do banco
    (ex.: `gru1`, São Paulo), para reduzir a latência de cada query.
 
